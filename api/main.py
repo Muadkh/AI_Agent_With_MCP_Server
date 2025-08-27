@@ -20,6 +20,7 @@ _: bool = load_dotenv(find_dotenv())
 # URL of our standalone MCP server (from shared_mcp_server)
 MCP_SERVER_URL = "http://localhost:3000/mcp/" 
 os.environ["OPENAI_TRACING"] = "1"
+Agent_Prompt= os.getenv("Agent_Prompt")
 gemini_api_key = os.getenv("GEMINI_API_KEY")
 # openai_api_key=os.getenv("OPENAI_API_KEY")
 print(gemini_api_key)
@@ -39,7 +40,7 @@ async def lifespan(app: FastAPI):
         app.state.mcp_server=mcp_server_stateless
         app.state.assistant = Agent(
             name="Assistant",
-            instructions="You are helpful assistant,Use MCP tools if needed",
+            instructions=Agent_Prompt,
             mcp_servers=[mcp_server_stateless],
             model=OpenAIChatCompletionsModel(
                 model="gemini-2.0-flash", 
@@ -104,11 +105,10 @@ async def process_query(request: QueryRequest):
                     if event.item.type == "tool_call_item":
                         payload = {"type": "tool_call", "data": event.item.raw_item.name}
                         yield f"data: {json.dumps(payload)}\n\n"
-                   
-                    if event.data=="is_final":
-                        payload = {"type": "done", "data": True}
-                        yield f"data: {json.dumps(payload)}\n\n"
-
+                
+            if result.is_complete:
+    # Send final done signal
+                yield f"data: {json.dumps({'type':'done','data': result.final_output})}\n\n"
 
 
         except Exception as e:

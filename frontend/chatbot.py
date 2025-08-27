@@ -185,7 +185,7 @@ class Chatbot:
                                         tool_placeholder.markdown(f"🔧 Calling tool:  {event['data']}")
 
                                     elif event["type"]=="done":
-                                        tool_placeholder.markdown(f"🔧 Calling tool Done :  ")
+                                        tool_placeholder.markdown(f"✅ Agent turn finished")
 
 
                                 except Exception:
