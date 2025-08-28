@@ -4,6 +4,9 @@ import asyncio
 import contextlib
 import json
 import os
+from agents.memory.session import SessionABC
+from agents.items import TResponseInputItem
+from typing import List, Optional
 from typing import Any
 from dotenv import load_dotenv, find_dotenv
 from agents import Agent, AsyncOpenAI, OpenAIChatCompletionsModel, Runner
@@ -30,6 +33,30 @@ client = AsyncOpenAI(
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
 )
 
+
+class InMemorySession(SessionABC):
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+        self._items: List[TResponseInputItem] = []
+
+    async def get_items(self, limit: Optional[int] = None) -> List[TResponseInputItem]:
+        return self._items if limit is None else self._items[-limit:]
+
+    async def add_items(self, items: List[TResponseInputItem]) -> None:
+        self._items.extend(items)
+
+    async def pop_item(self) -> Optional[TResponseInputItem]:
+        if self._items:
+            return self._items.pop()
+        return None
+
+    async def clear_session(self) -> None:
+        self._items.clear()
+
+
+
+
+
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     # client=MCPClient()
@@ -38,6 +65,7 @@ async def lifespan(app: FastAPI):
     async with MCPServerStreamableHttp(params=mcp_params, name="My_Web_Search_Server") as mcp_server_stateless:
         print(f"MCPServerStreamableHttp client '{mcp_server_stateless.name}' created and entered context.")
         app.state.mcp_server=mcp_server_stateless
+        app.state.session=InMemorySession("default_session")
         app.state.assistant = Agent(
             name="Assistant",
             instructions=Agent_Prompt,
@@ -45,7 +73,9 @@ async def lifespan(app: FastAPI):
             model=OpenAIChatCompletionsModel(
                 model="gemini-2.0-flash", 
                 openai_client=client,
+
             ),
+        
         )
 
         yield
@@ -90,7 +120,7 @@ async def process_query(request: QueryRequest):
         try:
         
         
-            result = Runner.run_streamed(starting_agent=assis, input=request.query)
+            result = Runner.run_streamed(starting_agent=assis, input=request.query, session=app.state.session)
         
             async for event in result.stream_events():
             # Stream message deltas
